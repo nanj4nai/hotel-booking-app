@@ -7,7 +7,7 @@ secrets.env
 webhook_debug.txt
 
 # Composer dependencies (will be installed via Docker)
-vendor/
+# vendor/
 
 # Node / frontend cache (optional)
 node_modules/

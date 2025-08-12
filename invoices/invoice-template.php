@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Invoice</title>
   <style>
     body {
@@ -89,10 +89,10 @@
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <img src="<?= $logoUrl ?>" alt="Logo">
+      <img src="<?= htmlspecialchars($logoUrl) ?>" alt="Logo" />
       <div><strong>Villa Rosal</strong></div>
-      <div><?= $businessAddress ?> · <?= $businessPhone ?></div>
-      <div><?= $businessEmail ?></div>
+      <div><?= htmlspecialchars($businessAddress) ?> · <?= htmlspecialchars($businessPhone) ?></div>
+      <div><?= htmlspecialchars($businessEmail) ?></div>
     </div>
 
     <!-- Invoice Info -->
@@ -100,15 +100,15 @@
     <table class="summary">
       <tr>
         <td><strong>Invoice #:</strong></td>
-        <td><?= $paymentData['xendit_invoice_id'] ?? '—' ?></td>
+        <td><?= htmlspecialchars($paymentData['xendit_invoice_id'] ?? '—') ?></td>
       </tr>
       <tr>
         <td><strong>Booking Code:</strong></td>
-        <td><?= $bookingData['booking_code'] ?></td>
+        <td><?= htmlspecialchars($bookingData['booking_code'] ?? '—') ?></td>
       </tr>
       <tr>
         <td><strong>Status:</strong></td>
-        <td><?= $paymentData['status'] ?> via <?= strtoupper($paymentData['payment_method']) ?></td>
+        <td><?= htmlspecialchars($paymentData['status'] ?? 'pending') ?> via <?= strtoupper(htmlspecialchars($paymentData['payment_method'] ?? 'unknown')) ?></td>
       </tr>
       <tr>
         <td><strong>Date Issued:</strong></td>
@@ -121,15 +121,15 @@
     <table class="summary">
       <tr>
         <td><strong>Name:</strong></td>
-        <td><?= $customerName ?></td>
+        <td><?= htmlspecialchars($customerName ?? 'Guest') ?></td>
       </tr>
       <tr>
         <td><strong>Email:</strong></td>
-        <td><?= $customerEmail ?></td>
+        <td><?= htmlspecialchars($customerEmail ?? '—') ?></td>
       </tr>
       <tr>
         <td><strong>Contact:</strong></td>
-        <td><?= $customerPhone ?></td>
+        <td><?= htmlspecialchars($customerPhone ?? '—') ?></td>
       </tr>
     </table>
 
@@ -138,19 +138,19 @@
     <table class="summary">
       <tr>
         <td><strong>Room:</strong></td>
-        <td><?= $roomName ?? 'Room N/A' ?></td>
+        <td><?= htmlspecialchars($roomName ?? 'Room N/A') ?></td>
       </tr>
       <tr>
         <td><strong>Check-in:</strong></td>
-        <td><?= $bookingData['check_in_date'] ?> @ <?= $bookingData['check_in_time'] ?></td>
+        <td><?= htmlspecialchars($checkInFormatted ?? '—') ?> @ <?= htmlspecialchars($checkInTime ?? '—') ?></td>
       </tr>
       <tr>
         <td><strong>Check-out:</strong></td>
-        <td><?= $bookingData['check_out_date'] ?? '—' ?></td>
+        <td><?= htmlspecialchars($checkOutFormatted ?? '—') ?> @ <?= htmlspecialchars($checkOutTime ?? '—') ?></td>
       </tr>
       <tr>
         <td><strong>Guests:</strong></td>
-        <td><?= $bookingData['adults'] ?> Adults, <?= $bookingData['children'] ?> Children</td>
+        <td><?= (int)($bookingData['adults'] ?? 0) ?> Adults, <?= (int)($bookingData['children'] ?? 0) ?> Children</td>
       </tr>
     </table>
 
@@ -161,24 +161,26 @@
         <tr>
           <th>Description</th>
           <th>Qty</th>
+          <th>Nights</th>
           <th>Unit Price</th>
           <th>Total</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td><?= $roomName ?></td>
-          <td><?= $paymentData['qty'] ?? 1 ?></td>
-          <td><?= number_format($paymentData['base_price'], 2) ?> pesos</td>
-          <td><?= number_format($paymentData['base_price'] * ($paymentData['qty'] ?? 1), 2) ?> pesos</td>
+          <td><?= htmlspecialchars($roomName ?? 'Room') ?></td>
+          <td><?= (int)($qty ?? 1) ?></td>
+          <td><?= (int)($nights ?? 1) ?></td>
+          <td><?= number_format((float)($basePrice ?? 0), 2) ?> pesos</td>
+          <td><?= number_format((float)($subtotal ?? 0), 2) ?> pesos</td>
         </tr>
         <tr>
-          <td colspan="3" style="text-align:right;"><strong>Processing Fee</strong></td>
-          <td><?= number_format($paymentData['fee'], 2) ?> pesos</td>
+          <td colspan="4" style="text-align:right;"><strong>Processing Fee (12%)</strong></td>
+          <td><?= number_format((float)($processingFee ?? 0), 2) ?> pesos</td>
         </tr>
         <tr>
-          <td colspan="3" style="text-align:right;"><strong>Total Amount</strong></td>
-          <td><strong><?= number_format($paymentData['amount'], 2) ?> pesos</strong></td>
+          <td colspan="4" style="text-align:right;"><strong>Total Amount</strong></td>
+          <td><strong><?= number_format((float)($totalAmount ?? 0), 2) ?> pesos</strong></td>
         </tr>
       </tbody>
     </table>
@@ -186,14 +188,14 @@
     <!-- QR -->
     <div class="qr">
       <p style="margin-bottom: 5px;">Scan to confirm booking</p>
-      <img src="<?= $qrUrl ?>" alt="QR Code">
-      <div style="font-size: 11px; color: #666; margin-top: 3px;">Xendit Invoice ID: <?= $paymentData['xendit_invoice_id'] ?? '—' ?></div>
+      <img src="<?= htmlspecialchars($qrUrl ?? '') ?>" alt="QR Code" />
+      <div style="font-size: 11px; color: #666; margin-top: 3px;">Xendit Invoice ID: <?= htmlspecialchars($paymentData['xendit_invoice_id'] ?? '—') ?></div>
     </div>
 
     <!-- Footer -->
     <div class="footer">
-      Thank you for booking with Villa Rosal 🌿<br>
-      Questions? Email <a href="mailto:<?= $businessEmail ?>"><?= $businessEmail ?></a>
+      Thank you for booking with Villa Rosal 🌿<br />
+      Questions? Email <a href="mailto:<?= htmlspecialchars($businessEmail ?? '') ?>"><?= htmlspecialchars($businessEmail ?? '') ?></a>
     </div>
   </div>
 </body>

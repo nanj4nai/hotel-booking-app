@@ -122,11 +122,27 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
     ]);
   }
   try {
+    $checkInDate = new DateTime($booking['check_in_date']);
+    $checkInTime = $bookingData['check_in_time'] ?? '—';
+    $checkOutDate = new DateTime($booking['check_out_date']);
+    $checkOutTime = $bookingData['check_out_time'] ?? '—';
+    $interval = $checkInDate->diff($checkOutDate);
+    $nights = (int)$interval->format('%a');
+    if ($nights < 1) $nights = 1;  // minimum 1 night
+
+    $checkInFormatted = $checkInDate->format('F j, Y');
+    $checkOutFormatted = $checkOutDate->format('F j, Y');
+
+    
     $qty = isset($qty) && is_numeric($qty) ? (int)$qty : 1;
     $roomName = $roomData['room_name'] ?? 'Room';
     $roomPrice = (float)($roomData['price'] ?? 0);
     $amountFormatted = number_format($payment['amount'], 2);
-    $processingFee = $payment['amount'] - $roomPrice;
+    $basePrice = (float)($room['price'] ?? 0);
+    $subtotal = $basePrice * $qty * $nights;
+    $processingFee = $subtotal * 0.12; // 12% processing fee
+    $totalAmount = $subtotal + $processingFee;
+
 
     $mail = new PHPMailer(true);
     $mail->SMTPDebug = 3;
@@ -154,25 +170,25 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
     $mail->setFrom($config['email_from'], $config['email_from_name']);
     $mail->addAddress($recipientEmail, $recipientName);
     $mail->isHTML(true);
-    $mail->Subject = 'Booking Payment Receipt - ' . $bookingData['booking_code'] ?? 'N/A';
+    $mail->Subject = 'Booking Payment Receipt - ' . ($bookingData['booking_code'] ?? 'N/A');
 
     // Booking details (for breakdown)
     $bookingData['booking_code'] = $booking['booking_code'] ?? 'UNKNOWN';
     $bookingData['check_in_date'] = $booking['check_in_date'];
     $bookingData['check_in_time'] = $booking['check_in_time'];
+    $bookingData['check_out_time'] = $booking['check_out_time'] ?? '—';
     $bookingData['check_out_date'] = $bookingData['check_out_date'] ?? '—';
     $paymentData['qty'] = $paymentData['qty'] ?? 1;
     $paymentData['xendit_invoice_id'] = $paymentData['xendit_invoice_id'] ?? '—';
     $bookingData['adults'] = $booking['adults'] ?? 2;
     $bookingData['children'] = $booking['children'] ?? 0;
 
-    $checkInDate = $bookingData['check_in_date'] ?? '—';
-    $checkInTime = $bookingData['check_in_time'] ?? '—';
-    $checkOutDate = $bookingData['check_out_date'] ?? '—';
+
     $adults = $bookingData['adults'] ?? 1;
     $children = $bookingData['children'] ?? 0;
     $invoiceId = $payment['xendit_invoice_id'] ?? null;
     $invoiceUrl = $invoiceId ? "https://checkout-staging.xendit.co/web/{$invoiceId}" : null;
+    
 
 
     $mail->Body = "
@@ -196,8 +212,8 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
 
           <table class='email-table' style='width: 100%; font-size: 14px; margin-top: 20px; border-collapse: collapse;'>
             <tr><td style='padding: 8px 0;'><strong>Room</strong></td><td>{$roomName}</td></tr>
-            <tr><td style='padding: 8px 0;'><strong>Check-in</strong></td><td>{$checkInDate} @ {$checkInTime}</td></tr>
-            <tr><td style='padding: 8px 0;'><strong>Check-out</strong></td><td>{$checkOutDate}</td></tr>
+            <tr><td style='padding: 8px 0;'><strong>Check-in</strong></td><td>{$checkInFormatted} @ {$checkInTime}</td></tr>
+            <tr><td style='padding: 8px 0;'><strong>Check-out</strong></td><td>{$checkOutFormatted} @ {$checkOutTime}</td></tr>
             <tr><td style='padding: 8px 0;'><strong>Guests</strong></td><td>{$adults} Adult(s), {$children} Child(ren)</td></tr>
             <tr><td style='padding: 8px 0;'><strong>Booking Code</strong></td><td>{$bookingData['booking_code']}</td></tr>
             <tr><td style='padding: 8px 0;'><strong>Amount Paid</strong></td><td>₱{$amountFormatted}</td></tr>
@@ -279,15 +295,17 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
 
 
     $paymentData = [
-      'base_price' => $room['price'] ?? 0,
-      'fee' => $payment['amount'] - ($room['price'] * $qty),
-      'amount' => $payment['amount'],
+      'base_price' => $basePrice,
+      'fee' => $processingFee,
+      'amount' => $totalAmount,
       'xendit_invoice_id' => $payment['xendit_invoice_id'],
       'created_at' => $createdPH,
       'payment_method' => $booking['payment_method'] ?? 'xendit',
       'qty' => $qty,
+      'nights' => $nights,  // <-- add nights here
       'status' => $payment['status'] ?? 'pending',
     ];
+
 
     // Generate QR code data
     $qrData = json_encode([
@@ -331,7 +349,7 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
 
     $baseUrl = $isVillarosa
       ? "https://villa-rosal-beach-resort.fwh.is/php/invoices"
-      : "https://xendi-webhook.onrender.com/invoices/"; // Replace with your actual Render domain
+      : "https://xendit-webhook-lwt7.onrender.com/invoices/"; // Replace with your actual Render domain
 
     $pdfLinkUrl = "$baseUrl/$pdfFilename";
 
@@ -360,8 +378,8 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
 
           <table class='email-table' style='width: 100%; font-size: 14px; margin-top: 20px; border-collapse: collapse;'>
             <tr><td style='padding: 8px 0;'><strong>Room</strong></td><td>{$roomName}</td></tr>
-            <tr><td style='padding: 8px 0;'><strong>Check-in</strong></td><td>{$checkInDate} @ {$checkInTime}</td></tr>
-            <tr><td style='padding: 8px 0;'><strong>Check-out</strong></td><td>{$checkOutDate}</td></tr>
+            <tr><td style='padding: 8px 0;'><strong>Check-in</strong></td><td>{$checkInFormatted} @ {$checkInTime}</td></tr>
+            <tr><td style='padding: 8px 0;'><strong>Check-out</strong></td><td>{$checkOutFormatted} @ {$checkOutTime}</td></tr>
             <tr><td style='padding: 8px 0;'><strong>Guests</strong></td><td>{$adults} Adult(s), {$children} Child(ren)</td></tr>
             <tr><td style='padding: 8px 0;'><strong>Booking Code</strong></td><td>{$bookingData['booking_code']}</td></tr>
             <tr><td style='padding: 8px 0;'><strong>Amount Paid</strong></td><td>₱{$amountFormatted}</td></tr>

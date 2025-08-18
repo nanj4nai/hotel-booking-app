@@ -102,18 +102,29 @@ $stmt->execute($params);
 
 // 9. If paid, update booking and send email
 if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
-  $pdo->prepare("UPDATE bookings SET booking_status = 'confirmed', is_confirmed = TRUE WHERE booking_id = ?")->execute([$bookingId]);
+  // 🔑 Fetch confirmed status ID from lookup
+  $stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = 'guaranteed' LIMIT 1");
+  $stmt->execute();
+  $statusId = $stmt->fetchColumn();
+
+  $pdo->prepare("
+    UPDATE bookings 
+    SET booking_status_id = ?, is_confirmed = TRUE 
+    WHERE booking_id = ?
+  ")->execute([$statusId, $bookingId]);
+
   file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking confirmed\n", FILE_APPEND);
+
   if ($paymentStatus === 'paid') {
     $extraFields = [
       'payment_method' => $data['payment_method'] ?? null,
     ];
 
     $stmt = $pdo->prepare("
-  UPDATE payments 
-  SET status = ?, payment_method = ?
-  WHERE xendit_invoice_id = ?
-");
+      UPDATE payments 
+      SET status = ?, payment_method = ?
+      WHERE xendit_invoice_id = ?
+    ");
 
     $stmt->execute([
       $paymentStatus,
@@ -414,11 +425,22 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
     file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Mail error: {$e->getMessage()}\n", FILE_APPEND);
   }
 } elseif (in_array($paymentStatus, ['expired', 'failed'])) {
-  $stmt = $pdo->prepare("UPDATE bookings SET booking_status = 'expired' WHERE booking_id = ?");
-  $stmt->execute([$bookingId]);
-  file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking marked as expired\n", FILE_APPEND);
+  // 🔑 Map API status to lookup
+  $stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = ? LIMIT 1");
+  $stmt->execute([$paymentStatus]);
+  $statusId = $stmt->fetchColumn();
+
+  if ($statusId) {
+    $stmt = $pdo->prepare("UPDATE bookings SET booking_status_id = ? WHERE booking_id = ?");
+    $stmt->execute([$statusId, $bookingId]);
+
+    file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking marked as {$paymentStatus}\n", FILE_APPEND);
+  } else {
+    file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Status '{$paymentStatus}' not found in booking_statuses\n", FILE_APPEND);
+  }
 }
 
 // ✅ Final response
 http_response_code(200);
 echo "✅ Payment status updated to '$paymentStatus' for booking ID $bookingId";
+

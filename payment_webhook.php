@@ -102,19 +102,19 @@ $stmt->execute($params);
 
 // 9. If paid, update booking and send email
 if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
-  // 🔑 Fetch confirmed status ID from lookup
-  $stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = 'guaranteed' LIMIT 1");
-  $stmt->execute();
-  $statusId = $stmt->fetchColumn();
+// 🔑 Fetch confirmed status ID from lookup (no LIMIT)
+$stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = 'guaranteed'");
+$stmt->execute();
+$statusId = $stmt->fetchColumn();
 
-  $pdo->prepare("
-    UPDATE bookings 
-    SET booking_status_id = ?, is_confirmed = TRUE 
-    WHERE booking_id = ?
-  ")->execute([$statusId, $bookingId]);
+$pdo->prepare("
+  UPDATE bookings 
+  SET booking_status_id = ?, is_confirmed = TRUE 
+  WHERE booking_id = ?
+")->execute([$statusId, $bookingId]);
 
-  file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking confirmed\n", FILE_APPEND);
-
+file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking confirmed\n", FILE_APPEND);
+  
   if ($paymentStatus === 'paid') {
     $extraFields = [
       'payment_method' => $data['payment_method'] ?? null,
@@ -425,8 +425,8 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
     file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Mail error: {$e->getMessage()}\n", FILE_APPEND);
   }
 } elseif (in_array($paymentStatus, ['expired', 'failed'])) {
-  // 🔑 Map API status to lookup
-  $stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = ? LIMIT 1");
+  // 🔑 Map API status to lookup (no LIMIT)
+  $stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = ?");
   $stmt->execute([$paymentStatus]);
   $statusId = $stmt->fetchColumn();
 
@@ -439,6 +439,7 @@ if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
     file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Status '{$paymentStatus}' not found in booking_statuses\n", FILE_APPEND);
   }
 }
+
 
 // ✅ Final response
 http_response_code(200);

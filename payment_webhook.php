@@ -102,10 +102,15 @@ $stmt->execute($params);
 
 // 9. If paid, update booking and send email
 if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
-// 🔑 Fetch confirmed status ID from lookup (no LIMIT)
-$stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = 'guaranteed'");
-$stmt->execute();
+$stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = ?");
+$stmt->execute(['guaranteed']);
 $statusId = $stmt->fetchColumn();
+
+if (!$statusId) {
+  file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Status 'guaranteed' not found in booking_statuses\n", FILE_APPEND);
+  http_response_code(500);
+  exit("❌ Booking status 'guaranteed' not found.");
+}
 
 $pdo->prepare("
   UPDATE bookings 

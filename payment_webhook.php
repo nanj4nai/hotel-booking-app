@@ -101,42 +101,43 @@ $stmt = $pdo->prepare($updateQuery);
 $stmt->execute($params);
 
 // 9. If paid, update booking and send email
-if ($paymentStatus === 'paid' && $bookingData['is_confirmed'] != true) {
-$stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = ?");
-$stmt->execute(['guaranteed']);
-$statusId = $stmt->fetchColumn();
+// 9. If paid, update booking status to GUARANTEED and mark as confirmed
+if ($paymentStatus === 'paid') {
+    // 9a. Get the "guaranteed" status ID
+    $stmt = $pdo->prepare("SELECT id FROM booking_statuses WHERE status_name = ?");
+    $stmt->execute(['guaranteed']);
+    $statusId = $stmt->fetchColumn();
 
-if (!$statusId) {
-  file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Status 'guaranteed' not found in booking_statuses\n", FILE_APPEND);
-  http_response_code(500);
-  exit("❌ Booking status 'guaranteed' not found.");
-}
+    if (!$statusId) {
+        file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Status 'guaranteed' not found in booking_statuses\n", FILE_APPEND);
+        http_response_code(500);
+        exit("❌ Booking status 'guaranteed' not found.");
+    }
 
-$pdo->prepare("
-  UPDATE bookings 
-  SET booking_status_id = ?, is_confirmed = TRUE 
-  WHERE booking_id = ?
-")->execute([$statusId, $bookingId]);
-
-file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking confirmed\n", FILE_APPEND);
-  
-  if ($paymentStatus === 'paid') {
-    $extraFields = [
-      'payment_method' => $data['payment_method'] ?? null,
-    ];
-
+    // 9b. Update booking to guaranteed and confirmed
     $stmt = $pdo->prepare("
-      UPDATE payments 
-      SET status = ?, payment_method = ?
-      WHERE xendit_invoice_id = ?
+        UPDATE bookings 
+        SET booking_status_id = ?, is_confirmed = TRUE 
+        WHERE booking_id = ?
     ");
+    $stmt->execute([$statusId, $bookingId]);
 
+    file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking marked as GUARANTEED\n", FILE_APPEND);
+
+    // 9c. Update payment method and status
+    $stmt = $pdo->prepare("
+        UPDATE payments 
+        SET status = ?, payment_method = ?
+        WHERE xendit_invoice_id = ?
+    ");
     $stmt->execute([
-      $paymentStatus,
-      $extraFields['payment_method'],
-      $invoiceId
+        $paymentStatus,
+        $data['payment_method'] ?? null,
+        $invoiceId
     ]);
-  }
+
+    file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Payment updated to PAID\n", FILE_APPEND);
+
   try {
     $checkInDate = new DateTime($booking['check_in_date']);
     $checkInTime = $bookingData['check_in_time'] ?? '—';
@@ -449,4 +450,3 @@ file_put_contents("webhook_debug.txt", date("Y-m-d H:i:s") . " - Booking confirm
 // ✅ Final response
 http_response_code(200);
 echo "✅ Payment status updated to '$paymentStatus' for booking ID $bookingId";
-
